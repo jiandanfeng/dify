@@ -156,6 +156,52 @@ export const useNodesInteractions = () => {
     }
   }, [workflowStore, getNodesReadOnly, saveStateToHistory, handleSyncWorkflowDraft])
 
+  const handleNodeSelect = useCallback((nodeId: string, cancelSelection?: boolean) => {
+    const {
+      getNodes,
+      setNodes,
+      edges,
+      setEdges,
+    } = store.getState()
+
+    const nodes = getNodes()
+    const selectedNode = nodes.find(node => node.data.selected)
+
+    if (!cancelSelection && selectedNode?.id === nodeId)
+      return
+
+    const newNodes = produce(nodes, (draft) => {
+      draft.forEach((node) => {
+        if (node.id === nodeId)
+          node.data.selected = !cancelSelection
+        else
+          node.data.selected = false
+      })
+    })
+    setNodes(newNodes)
+
+    const connectedEdges = getConnectedEdges([{ id: nodeId } as Node], edges).map(edge => edge.id)
+    const newEdges = produce(edges, (draft) => {
+      draft.forEach((edge) => {
+        if (connectedEdges.includes(edge.id)) {
+          edge.data = {
+            ...edge.data,
+            _connectedNodeIsSelected: !cancelSelection,
+          }
+        }
+        else {
+          edge.data = {
+            ...edge.data,
+            _connectedNodeIsSelected: false,
+          }
+        }
+      })
+    })
+    setEdges(newEdges)
+
+    handleSyncWorkflowDraft()
+  }, [store, handleSyncWorkflowDraft])
+
   const handleNodeEnter = useCallback<NodeMouseHandler>((_, node) => {
     if (getNodesReadOnly())
       return
@@ -228,7 +274,9 @@ export const useNodesInteractions = () => {
       })
       setNodes(newNodes)
     }
-  }, [store, workflowStore, getNodesReadOnly])
+    if (node.data && node.data.type === BlockEnum.LLM)
+      handleNodeSelect(node.id)
+  }, [store, workflowStore, getNodesReadOnly, handleNodeSelect])
 
   const handleNodeLeave = useCallback<NodeMouseHandler>((_, node) => {
     if (getNodesReadOnly())
@@ -261,52 +309,6 @@ export const useNodesInteractions = () => {
     })
     setEdges(newEdges)
   }, [store, workflowStore, getNodesReadOnly])
-
-  const handleNodeSelect = useCallback((nodeId: string, cancelSelection?: boolean) => {
-    const {
-      getNodes,
-      setNodes,
-      edges,
-      setEdges,
-    } = store.getState()
-
-    const nodes = getNodes()
-    const selectedNode = nodes.find(node => node.data.selected)
-
-    if (!cancelSelection && selectedNode?.id === nodeId)
-      return
-
-    const newNodes = produce(nodes, (draft) => {
-      draft.forEach((node) => {
-        if (node.id === nodeId)
-          node.data.selected = !cancelSelection
-        else
-          node.data.selected = false
-      })
-    })
-    setNodes(newNodes)
-
-    const connectedEdges = getConnectedEdges([{ id: nodeId } as Node], edges).map(edge => edge.id)
-    const newEdges = produce(edges, (draft) => {
-      draft.forEach((edge) => {
-        if (connectedEdges.includes(edge.id)) {
-          edge.data = {
-            ...edge.data,
-            _connectedNodeIsSelected: !cancelSelection,
-          }
-        }
-        else {
-          edge.data = {
-            ...edge.data,
-            _connectedNodeIsSelected: false,
-          }
-        }
-      })
-    })
-    setEdges(newEdges)
-
-    handleSyncWorkflowDraft()
-  }, [store, handleSyncWorkflowDraft])
 
   const handleNodeClick = useCallback<NodeMouseHandler>((_, node) => {
     if (node.type === CUSTOM_ITERATION_START_NODE)
